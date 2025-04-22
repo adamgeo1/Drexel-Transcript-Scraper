@@ -1,8 +1,5 @@
-from ast import parse
-
 from playwright.sync_api import sync_playwright
 import argparse
-import sys
 import pandas as pd
 from pathlib import Path
 from pypdf import PdfReader
@@ -24,7 +21,7 @@ ERROR_LOG_PATH = OUTPUT_DIR / "transcript_error_log.txt"
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
 # === Extract grades from downloaded transcript PDF ===
-def getGrades(course: str, path: str):
+def getGrades(course: str, path: Path):
     courseDept, courseNum = course.split()
     grades = []  # list in case course taken multiple times
     with open(path, "rb") as file:
@@ -56,11 +53,79 @@ def launchBrowser():
     else:
         return p.chromium.launch(headless=False, channel="chrome")
 
+def launchBrowserWithContext():
+    browser = launchBrowser()
+    return browser, browser.new_context(storage_state="storage_state.json")
+
+def processStudent(df, idx, student_id, context, page):
+    firstName = df.at[idx, "First"]
+    lastName = df.at[idx, "Last"]
+    try:
+        href = page.locator("text=More BannerWeb Faculty Services").get_attribute("href")
+        banner = context.new_page()
+        print("Opening BannerWeb")
+        banner.goto(href, wait_until="networkidle")
+        print("Opening Advisor Menu")
+        banner.click("text=Advisor Menu")
+        bannerDomain = "https://banner.drexel.edu"
+        link = banner.locator("text=Student Academic Transcript")
+        href = link.get_attribute("href")
+        print(f"✅ Found transcript link: {bannerDomain + href}")
+        transcript_page = context.new_page()
+        print("Opening Student Academic Transcript")
+        transcript_page.goto(bannerDomain + href, wait_until="load")  # opens transcript finder in new tab
+        transcript_page.select_option("select[name='term']",
+                                      label="Winter Quarter 24-25")  # selects Winter 24-25 from dropdown menu
+        print("Waiting for Submit button on Select Term Page")
+        transcript_page.wait_for_selector('input[value="Submit"]', timeout=5000)
+        print("Clicking submit")
+        transcript_page.click('input[value="Submit"]')  # clicks submit, moves on to name entry page
+        print("Entering last name")
+        transcript_page.fill("#LN", lastName)  # enters student last name
+        print("Entering first name")
+        transcript_page.fill("#FN", firstName)  # enters student first name
+        print("Waiting for Submit button on Student Name Page")
+        transcript_page.wait_for_selector('input[value="Submit"]', timeout=5000)
+        print("Clicking submit")
+        transcript_page.click('input[value="Submit"]')  # clicks submit, moves onto student selection page
+        print("Waiting for Submit button on Student Selection Page")
+        transcript_page.wait_for_selector('input[value="Submit"]', timeout=5000)
+        print("Clicking submit")
+        transcript_page.click(
+            'input[value="Submit"]')  # automatically clicks submit as we assume first student available is correct
+        if transcript_page.locator(
+                "text=ERROR").is_visible():  # if student that hasn't taken the course in quarter selected
+            raise Exception(student_id)  # passes student id to error log
+        print("Waiting for Display Transcript button on Student Page")
+        transcript_page.wait_for_selector('input[value="Display Transcript"]', timeout=5000)
+        print("Clicking display transcript")
+        transcript_page.click(
+            'input[value="Display Transcript"]')  # clicks display transcript to allow the page to be saved as a PDF
+        print(f"Saving as StudentAcademicTranscript{student_id}.pdf in {OUTPUT_DIR}")
+        transcript_page.pdf(path=OUTPUT_DIR / f"StudentAcademicTranscript{student_id}.pdf",
+                            print_background=True)  # saves transcript as PDF to designated output folder
+        print(f"Getting grades from PDF for {student_id}")
+        grades = getGrades(COURSE,
+                           OUTPUT_DIR / f"StudentAcademicTranscript{student_id}.pdf")  # calls getGrades() and passes through student transcript
+        df.at[idx, COURSE] = ", ".join(
+            grades) if grades else "N"  # adds student grade for given course to CSV, "N" if they haven't taken it at all
+        print("Closing transcript tab")
+        transcript_page.close()  # closes transcript finder tab, repeats process with next student in CSV
+        print("Closing banner tab")
+        banner.close()
+        href, link, banner, transcript_page = None, None, None, None
+
+    except Exception as e:
+        print(f"Error for {student_id}: {e}")  # prints error on student ID
+        with open(ERROR_LOG_PATH, "a") as f:
+            f.write(f"{student_id}: {e}\n")  # writes student id for manual review to error_log.txt
+        df.at[idx, COURSE] = "ERROR"  # puts ERROR for the course grade in CSV
+
 # === Main automation ===
 df = pd.read_csv(CSV_PATH)
 student_ids = df["ID"].tolist()
 
-if "--login" in sys.argv:
+if args.login:
     with sync_playwright() as p:
         browser = launchBrowser()
         context = browser.new_context()
@@ -77,10 +142,9 @@ if "--login" in sys.argv:
         print("Login saved to storage_state.json")
         browser.close()
 
-elif "--manual" in sys.argv:
+elif args.manual:
     with sync_playwright() as p:
-        browser = launchBrowser()
-        context = browser.new_context(storage_state="storage_state.json")
+        browser, context = launchBrowserWithContext()
         page = context.new_page()
         page.goto("https://one.drexel.edu/", wait_until="load")  # goes straight to faculty tab
         page.wait_for_timeout(600000)
@@ -88,69 +152,13 @@ elif "--manual" in sys.argv:
 
 else:
     with sync_playwright() as p:
-        browser = launchBrowser()
-        context = browser.new_context(storage_state="storage_state.json")
+        browser, context = launchBrowserWithContext()
         page = context.new_page()
         page.goto("https://one.drexel.edu/", wait_until="load")  # goes straight to faculty tab
         page.click("text=FACULTY")
         open(ERROR_LOG_PATH, "w").close()
 
         for idx, student_id in enumerate(student_ids):
-            firstName = df.at[idx, "First"]
-            lastName = df.at[idx, "Last"]
-            try:
-                href = page.locator("text=More BannerWeb Faculty Services").get_attribute("href")
-                banner = context.new_page()
-                print("Opening BannerWeb")
-                banner.goto(href, wait_until="networkidle")
-                print("Opening Advisor Menu")
-                banner.click("text=Advisor Menu")
-                bannerDomain = "https://banner.drexel.edu"
-                link = banner.locator("text=Student Academic Transcript")
-                href = link.get_attribute("href")
-                print(f"✅ Found transcript link: {bannerDomain + href}")
-                transcript_page = context.new_page()
-                print("Opening Student Academic Transcript")
-                transcript_page.goto(bannerDomain + href, wait_until="load")  # opens transcript finder in new tab
-                transcript_page.select_option("select[name='term']", label="Winter Quarter 24-25") # selects Winter 24-25 from dropdown menu
-                print("Waiting for Submit button on Select Term Page")
-                transcript_page.wait_for_selector('input[value="Submit"]', timeout=5000)
-                print("Clicking submit")
-                transcript_page.click('input[value="Submit"]') # clicks submit, moves on to name entry page
-                print("Entering last name")
-                transcript_page.fill("#LN", lastName) # enters student last name
-                print("Entering first name")
-                transcript_page.fill("#FN", firstName) # enters student first name
-                print("Waiting for Submit button on Student Name Page")
-                transcript_page.wait_for_selector('input[value="Submit"]', timeout=5000)
-                print("Clicking submit")
-                transcript_page.click('input[value="Submit"]') # clicks submit, moves onto student selection page
-                print("Waiting for Submit button on Student Selection Page")
-                transcript_page.wait_for_selector('input[value="Submit"]', timeout=5000)
-                print("Clicking submit")
-                transcript_page.click('input[value="Submit"]') # automatically clicks submit as we assume first student available is correct
-                if transcript_page.locator(
-                    "text=ERROR").is_visible():  # if student that hasn't taken the course in quarter selected
-                    raise Exception(student_id)  # passes student id to error log
-                print("Waiting for Display Transcript button on Student Page")
-                transcript_page.wait_for_selector('input[value="Display Transcript"]', timeout=5000)
-                print("Clicking display transcript")
-                transcript_page.click('input[value="Display Transcript"]') # clicks display transcript to allow the page to be saved as a PDF
-                print(f"Saving as StudentAcademicTranscript{student_id}.pdf in {OUTPUT_DIR}")
-                transcript_page.pdf(path=OUTPUT_DIR / f"StudentAcademicTranscript{student_id}.pdf", print_background=True)  # saves transcript as PDF to designated output folder
-                print(f"Getting grades from PDF for {student_id}")
-                grades = getGrades(COURSE, str(OUTPUT_DIR / f"StudentAcademicTranscript{student_id}.pdf")) # calls getGrades() and passes through student transcript
-                df.at[idx, COURSE] = ", ".join(grades) if grades else "N" # adds student grade for given course to CSV, "N" if they haven't taken it at all
-                print("Closing transcript tab")
-                transcript_page.close()  # closes transcript finder tab, repeats process with next student in CSV
-                print("Closing banner tab")
-                banner.close()
-                href, link, banner, transcript_page = None, None, None, None
-
-            except Exception as e:
-                print(f"Error for {student_id}: {e}") # prints error on student ID
-                with open(ERROR_LOG_PATH, "a") as f:
-                    f.write(f"{student_id}: {e}\n")  # writes student id for manual review to error_log.txt
-                df.at[idx, COURSE] = "ERROR" # puts ERROR for the course grade in CSV
+            processStudent(df, idx, student_id, context, page)
 
         df.to_csv(CSV_PATH, index=False)
