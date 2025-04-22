@@ -17,6 +17,7 @@ pip install -r requirements.txt
 ```
 ## Files
 - `TranscriptScraper.py`: Main automation script
+- `TranscriptAnonymizer.py`: Redacts student names from transcripts in current working directory
 - `students.csv` Student data with `Last`, `First`, and `ID` columns
 - `requirements.txt` Python dependencies
 
