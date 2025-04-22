@@ -2,7 +2,7 @@ from playwright.sync_api import sync_playwright
 import argparse
 import pandas as pd
 from pathlib import Path
-from pypdf import PdfReader
+import fitz
 
 # === ARGUMENT PARSING ===
 parser = argparse.ArgumentParser(description="Drexel Transcript Scraper")
@@ -24,11 +24,10 @@ OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 def getGrades(course: str, path: Path):
     courseDept, courseNum = course.split()
     grades = []  # list in case course taken multiple times
-    with open(path, "rb") as file:
-        reader = PdfReader(file)
-        fullText = ""
-        for page in reader.pages:
-            fullText += page.extract_text() # full transcript text
+    doc = fitz.open(path)
+    fullText = ""
+    for page in doc:
+        fullText += page.get_text() # full transcript text
 
     lines = fullText.split("\n") # splits by each word into list
     for line in lines:
