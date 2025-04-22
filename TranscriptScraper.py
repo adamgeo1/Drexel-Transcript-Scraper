@@ -121,44 +121,48 @@ def processStudent(df, idx, student_id, context, page):
             f.write(f"{student_id}: {e}\n")  # writes student id for manual review to error_log.txt
         df.at[idx, COURSE] = "ERROR"  # puts ERROR for the course grade in CSV
 
-# === Main automation ===
-df = pd.read_csv(CSV_PATH)
-student_ids = df["ID"].tolist()
+def main():
+    # === Main automation ===
+    df = pd.read_csv(CSV_PATH)
+    student_ids = df["ID"].tolist()
 
-if args.login:
-    with sync_playwright() as p:
-        browser = launchBrowser()
-        context = browser.new_context()
-        page = context.new_page()
-        page.goto("https://one.drexel.edu")
+    if args.login:
+        with sync_playwright() as p:
+            browser = launchBrowser()
+            context = browser.new_context()
+            page = context.new_page()
+            page.goto("https://one.drexel.edu")
 
-        # Wait for manual login
-        print("⚠️ Please log in manually and complete 2FA. Then wait for window to close automatically. You have 60 seconds.")
+            # Wait for manual login
+            print("⚠️ Please log in manually and complete 2FA. Then wait for window to close automatically. You have 60 seconds.")
 
-        page.wait_for_timeout(60000)  # 60 seconds to log in manually
+            page.wait_for_timeout(60000)  # 60 seconds to log in manually
 
-        # Save login cookies and local storage
-        context.storage_state(path="storage_state.json")
-        print("Login saved to storage_state.json")
-        browser.close()
+            # Save login cookies and local storage
+            context.storage_state(path="storage_state.json")
+            print("Login saved to storage_state.json")
+            browser.close()
 
-elif args.manual:
-    with sync_playwright() as p:
-        browser, context = launchBrowserWithContext()
-        page = context.new_page()
-        page.goto("https://one.drexel.edu/", wait_until="load")  # goes straight to faculty tab
-        page.wait_for_timeout(600000)
-        browser.close()
+    elif args.manual:
+        with sync_playwright() as p:
+            browser, context = launchBrowserWithContext()
+            page = context.new_page()
+            page.goto("https://one.drexel.edu/", wait_until="load")  # goes straight to faculty tab
+            page.wait_for_timeout(600000)
+            browser.close()
 
-else:
-    with sync_playwright() as p:
-        browser, context = launchBrowserWithContext()
-        page = context.new_page()
-        page.goto("https://one.drexel.edu/", wait_until="load")  # goes straight to faculty tab
-        page.click("text=FACULTY")
-        open(ERROR_LOG_PATH, "w").close()
+    else:
+        with sync_playwright() as p:
+            browser, context = launchBrowserWithContext()
+            page = context.new_page()
+            page.goto("https://one.drexel.edu/", wait_until="load")  # goes straight to faculty tab
+            page.click("text=FACULTY")
+            open(ERROR_LOG_PATH, "w").close()
 
-        for idx, student_id in enumerate(student_ids):
-            processStudent(df, idx, student_id, context, page)
+            for idx, student_id in enumerate(student_ids):
+                processStudent(df, idx, student_id, context, page)
 
-        df.to_csv(CSV_PATH, index=False)
+            df.to_csv(CSV_PATH, index=False)
+
+if __name__ == "__main__":
+    main()
