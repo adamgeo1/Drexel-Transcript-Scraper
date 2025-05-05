@@ -46,14 +46,14 @@ def getGrades(course: str, path: Path):
                     break
     return grades
 
-def launchBrowser():
+def launchBrowser(p):
     if BROWSER == "firefox":
         return p.firefox.launch(headless=False)
     else:
         return p.chromium.launch(headless=False, channel="chrome")
 
-def launchBrowserWithContext():
-    browser = launchBrowser()
+def launchBrowserWithContext(p):
+    browser = launchBrowser(p)
     return browser, browser.new_context(storage_state="storage_state.json")
 
 def processStudent(df, idx, student_id, context, page):
@@ -127,7 +127,7 @@ def main():
 
     if args.login:
         with sync_playwright() as p:
-            browser = launchBrowser()
+            browser = launchBrowser(p)
             context = browser.new_context()
             page = context.new_page()
             page.goto("https://one.drexel.edu")
