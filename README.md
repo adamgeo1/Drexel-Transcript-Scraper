@@ -17,7 +17,7 @@ pip install -r requirements.txt
 ```
 ## Files
 - `TranscriptScraper.py`: Main automation script
-- `TranscriptAnonymizer.py`: Redacts student names from transcripts in current working directory
+- `TranscriptAnonymizer.py`: Redacts student names from transcripts in `TranscriptDownloads` in current working directory
 - `students.csv` Student data with `Last`, `First`, and `ID` columns
 - `requirements.txt` Python dependencies
 
@@ -34,7 +34,8 @@ run it on another day you may need to repeat this step.
 2. Now that you have your `stored_state.json`, you may run the program with your desired course number.
 3. ⚠️ One common snag is that when opening a BannerWeb link, you may need to manually click `BANNER WEB` on the sign-in page
 that pops up every dozen students or so.
-4. Once the program finishes and the browser closes, the CSV will have all the grades for the entered course for each student.
+4. All transcripts are downloaded into `TranscriptDownloads`, a folder created in the current working directory
+5. Once the program finishes and the browser closes, the CSV will have all the grades for the entered course for each student.
 
 ## Arguments
 - `--login`: Launches the script in a manual login mode, giving the user 60 seconds to login before automatically closing
@@ -42,5 +43,5 @@ and saving the session to `stored_state.json`
 - `--course 'DEPT NUM'`: Specifies a course to search for in student transcripts, `MATH 221` if not specified.
 - `--manual`: Opens Drexel One with no automation to be used for testing purposes, closes automatically in 10 minutes.
 - `--firefox`: Uses Firefox instead of Chrome.
-
+- `--no_download`: Will run the scraper on already downloaded transcripts inside `TranscriptDownloads`
 

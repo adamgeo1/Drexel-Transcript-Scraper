@@ -2,7 +2,7 @@ from playwright.sync_api import sync_playwright
 import argparse
 import pandas as pd
 from pathlib import Path
-import fitz
+from pypdf import PdfReader
 
 # === ARGUMENT PARSING ===
 parser = argparse.ArgumentParser(description="Drexel Transcript Scraper")
@@ -10,6 +10,7 @@ parser.add_argument("--course", type=str, default="MATH 221", help="Course code 
 parser.add_argument("--login", action="store_true", help="Login for first-time setup")
 parser.add_argument("--manual", action="store_true", help="Open browser in manual mode")
 parser.add_argument("--firefox", action="store_true", help="Use Firefox instead of Chrome")
+parser.add_argument("--no_download", action="store_true", help="Scans already downloaded transcripts")
 args = parser.parse_args()
 
 # === CONFIGURATION ===
@@ -24,10 +25,11 @@ OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 def getGrades(course: str, path: Path):
     courseDept, courseNum = course.split()
     grades = []  # list in case course taken multiple times
-    doc = fitz.open(path)
-    fullText = ""
-    for page in doc:
-        fullText += page.get_text() # full transcript text
+    with open(path, "rb") as file:
+        reader = PdfReader(file)
+        fullText = ""
+        for page in reader.pages:
+            fullText += page.extract_text() # full transcript text
 
     lines = fullText.split("\n") # splits by each word into list
     for line in lines:
@@ -122,7 +124,7 @@ def processStudent(df, idx, student_id, context, page):
 
 def main():
     # === Main automation ===
-    df = pd.read_csv(CSV_PATH)
+    df = pd.read_csv(CSV_PATH, dtype={COURSE: "string"})
     student_ids = df["ID"].tolist()
 
     if args.login:
@@ -149,6 +151,24 @@ def main():
             page.goto("https://one.drexel.edu/", wait_until="load")  # goes straight to faculty tab
             page.wait_for_timeout(600000)
             browser.close()
+
+    elif args.no_download:
+        print("📂 Scanning already downloaded transcripts...")
+
+        open(ERROR_LOG_PATH, "w").close()
+
+        for idx, student_id in enumerate(student_ids):
+            transcript_path = OUTPUT_DIR / f"StudentAcademicTranscript{student_id}.pdf"
+
+            # Will raise an error if the file doesn't exist
+            assert transcript_path.exists(), f"Transcript not found: {transcript_path}"
+
+            print(f"📄 Processing {transcript_path.name}")
+            grades = getGrades(COURSE, transcript_path)
+            df.at[idx, COURSE] = ", ".join(grades) if grades else "N"
+
+        df.to_csv(CSV_PATH, index=False)
+        print("✅ Grade extraction complete. CSV updated.")
 
     else:
         with sync_playwright() as p:
