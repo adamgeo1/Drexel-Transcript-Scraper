@@ -10,7 +10,7 @@ parser.add_argument("--course", type=str, default="MATH 221", help="Course code 
 parser.add_argument("--login", action="store_true", help="Login for first-time setup")
 parser.add_argument("--manual", action="store_true", help="Open browser in manual mode")
 parser.add_argument("--firefox", action="store_true", help="Use Firefox instead of Chrome")
-parser.add_argument("--no_download", action="store_true", help="Scans already downloaded transcripts")
+parser.add_argument("--no-download", action="store_true", help="Scans already downloaded transcripts")
 args = parser.parse_args()
 
 # === CONFIGURATION ===

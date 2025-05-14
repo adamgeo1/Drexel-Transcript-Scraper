@@ -43,5 +43,5 @@ and saving the session to `stored_state.json`
 - `--course 'DEPT NUM'`: Specifies a course to search for in student transcripts, `MATH 221` if not specified.
 - `--manual`: Opens Drexel One with no automation to be used for testing purposes, closes automatically in 10 minutes.
 - `--firefox`: Uses Firefox instead of Chrome.
-- `--no_download`: Will run the scraper on already downloaded transcripts inside `TranscriptDownloads`
+- `--no-download`: Will run the scraper on already downloaded transcripts inside `TranscriptDownloads`
 
